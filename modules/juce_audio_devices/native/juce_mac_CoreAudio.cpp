@@ -1099,10 +1099,7 @@ public:
     
     DynamicObject getLatencyDetails() override
     {
-        DynamicObject details;
-        details.setProperty ("currentBufferSize", getCurrentBufferSizeSamples());
-        details.setProperty ("inputLatency", internal->inputLatency);
-        details.setProperty ("outputLatency", internal->outputLatency);
+        DynamicObject details = AudioIODevice::getLatencyDetails();
         details.setProperty ("inputDeviceLatency", static_cast<int> (internal->inputLatencyDetails.deviceLatency));
         details.setProperty ("inputSafetyOffset", static_cast<int> (internal->inputLatencyDetails.safetyOffset));
         details.setProperty ("inputStreamLatency", static_cast<int> (internal->inputLatencyDetails.streamLatency));
