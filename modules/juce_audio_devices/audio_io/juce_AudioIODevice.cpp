@@ -30,6 +30,15 @@ AudioIODevice::AudioIODevice (const String& deviceName, const String& deviceType
 
 AudioIODevice::~AudioIODevice() {}
 
+DynamicObject AudioIODevice::getLatencyDetails()
+{
+    DynamicObject details;
+    details.setProperty ("currentBufferSize", getCurrentBufferSizeSamples());
+    details.setProperty ("inputLatency", getInputLatencyInSamples());
+    details.setProperty ("outputLatency", getOutputLatencyInSamples());
+    return details;
+}
+
 void AudioIODeviceCallback::audioDeviceError (const String&)    {}
 bool AudioIODevice::setAudioPreprocessingEnabled (bool)         { return false; }
 bool AudioIODevice::hasControlPanel() const                     { return false; }

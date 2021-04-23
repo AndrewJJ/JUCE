@@ -277,6 +277,13 @@ public:
         and the callback getting passed this block of data.
     */
     virtual int getInputLatencyInSamples() = 0;
+    
+    /** Returns details on the device's latency.
+     
+        Always includes input and output latency components, but may be overidden to include other
+        components,. E.g. CoreAudio can supply the safety offsets and stream latencies.
+     */
+    virtual DynamicObject getLatencyDetails();
 
 
     //==============================================================================

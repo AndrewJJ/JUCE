@@ -353,6 +353,48 @@ public:
 
         return (int) (latency + safetyOffset);
     }
+    
+    struct LatencyDetails
+    {
+        UInt32 deviceLatency;
+        UInt32 safetyOffset;
+        UInt32 streamLatency;
+    };
+    
+    LatencyDetails getLatencyDetailsFromDevice (AudioObjectPropertyScope scope) const
+    {
+        UInt32 deviceLatency = 0;
+        UInt32 size = sizeof (deviceLatency);
+        AudioObjectPropertyAddress pa;
+        pa.mElement = kAudioObjectPropertyElementMaster;
+        pa.mSelector = kAudioDevicePropertyLatency;
+        pa.mScope = scope;
+        AudioObjectGetPropertyData (deviceID, &pa, 0, nullptr, &size, &deviceLatency);
+
+        UInt32 safetyOffset = 0;
+        size = sizeof (safetyOffset);
+        pa.mSelector = kAudioDevicePropertySafetyOffset;
+        AudioObjectGetPropertyData (deviceID, &pa, 0, nullptr, &size, &safetyOffset);
+
+        // Query stream latency
+        UInt32 streamLatency = 0;
+        UInt32 numStreams;
+        pa.mSelector = kAudioDevicePropertyStreams;
+        if (OK(AudioObjectGetPropertyDataSize (deviceID, &pa, 0, nullptr, &numStreams)))
+        {
+            HeapBlock<AudioStreamID> streams (numStreams);
+            size = sizeof (AudioStreamID*);
+            if (OK(AudioObjectGetPropertyData (deviceID, &pa, 0, nullptr, &size, streams)))
+            {
+                pa.mSelector = kAudioStreamPropertyLatency;
+                size = sizeof (streamLatency);
+                // We could check all streams for the device, but it only ever seems to return the stream latency on the first stream
+                AudioObjectGetPropertyData (streams[0], &pa, 0, nullptr, &size, &streamLatency);
+            }
+        }
+
+        return { deviceLatency, safetyOffset, streamLatency };
+    }
 
     int getBitDepthFromDevice (AudioObjectPropertyScope scope) const
     {
@@ -415,6 +457,9 @@ public:
 
         auto newInputLatency  = getLatencyFromDevice (kAudioDevicePropertyScopeInput);
         auto newOutputLatency = getLatencyFromDevice (kAudioDevicePropertyScopeOutput);
+        
+        auto newInputLatencyDetails = getLatencyDetailsFromDevice(kAudioDevicePropertyScopeInput);
+        auto newOutputLatencyDetails = getLatencyDetailsFromDevice(kAudioDevicePropertyScopeOutput);
 
         Array<CallbackDetailsForChannel> newInChans, newOutChans;
         auto newInNames  = isInputDevice  ? getChannelInfo (true,  newInChans)  : StringArray();
@@ -434,6 +479,9 @@ public:
 
             inputLatency  = newInputLatency;
             outputLatency = newOutputLatency;
+            inputLatencyDetails = newInputLatencyDetails;
+            outputLatencyDetails = newOutputLatencyDetails;
+            
             bufferSize = newBufferSize;
 
             sampleRates.swapWith (newSampleRates);
@@ -810,6 +858,8 @@ public:
     CoreAudioIODevice& owner;
     int inputLatency  = 0;
     int outputLatency = 0;
+    LatencyDetails inputLatencyDetails;
+    LatencyDetails outputLatencyDetails;
     int bitDepth = 32;
     int xruns = 0;
     BigInteger activeInputChans, activeOutputChans;
@@ -1045,6 +1095,21 @@ public:
     int getInputLatencyInSamples() override
     {
         return internal->inputLatency;
+    }
+    
+    DynamicObject getLatencyDetails() override
+    {
+        DynamicObject details;
+        details.setProperty ("currentBufferSize", getCurrentBufferSizeSamples());
+        details.setProperty ("inputLatency", internal->inputLatency);
+        details.setProperty ("outputLatency", internal->outputLatency);
+        details.setProperty ("inputDeviceLatency", static_cast<int> (internal->inputLatencyDetails.deviceLatency));
+        details.setProperty ("inputSafetyOffset", static_cast<int> (internal->inputLatencyDetails.safetyOffset));
+        details.setProperty ("inputStreamLatency", static_cast<int> (internal->inputLatencyDetails.streamLatency));
+        details.setProperty ("outputDeviceLatency", static_cast<int> (internal->outputLatencyDetails.deviceLatency));
+        details.setProperty ("outputSafetyOffset", static_cast<int> (internal->outputLatencyDetails.safetyOffset));
+        details.setProperty ("outputStreamLatency", static_cast<int> (internal->outputLatencyDetails.streamLatency));
+        return details;
     }
 
     void start (AudioIODeviceCallback* callback) override
@@ -1517,6 +1582,18 @@ public:
             lat = jmax (lat, d->device->getInputLatencyInSamples());
 
         return lat + currentBufferSize * 2;
+    }
+    
+    DynamicObject getLatencyDetails() override
+    {
+        DynamicObject details;
+        for (auto* d : devices)
+        {
+            const auto props = d->device->getLatencyDetails().getProperties();
+            for (const auto& prop : props)
+                details.setProperty (prop.name, jmax (details.getProperty (prop.name), prop.value));
+        }
+        return details;
     }
 
     void start (AudioIODeviceCallback* newCallback) override
