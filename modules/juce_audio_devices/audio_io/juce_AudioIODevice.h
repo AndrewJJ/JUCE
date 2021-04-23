@@ -280,8 +280,9 @@ public:
     
     /** Returns details on the device's latency.
      
-        Always includes input and output latency components, but may be overidden to include other
-        components,. E.g. CoreAudio can supply the safety offsets and stream latencies.
+        Always includes current buffer size, input and output latency components, but may be overridden to
+        include other components. E.g. CoreAudio supplies the safety offsets and stream latencies for both
+        input and output devices.
      */
     virtual DynamicObject getLatencyDetails();
 
