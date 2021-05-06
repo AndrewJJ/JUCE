@@ -351,7 +351,24 @@ public:
         pa.mSelector = kAudioDevicePropertySafetyOffset;
         AudioObjectGetPropertyData (deviceID, &pa, 0, nullptr, &size, &safetyOffset);
 
-        return (int) (latency + safetyOffset);
+		// Query stream latency
+        UInt32 streamLatency = 0;
+        UInt32 numStreams;
+        pa.mSelector = kAudioDevicePropertyStreams;
+        if (OK(AudioObjectGetPropertyDataSize (deviceID, &pa, 0, nullptr, &numStreams)))
+        {
+            HeapBlock<AudioStreamID> streams (numStreams);
+            size = sizeof (AudioStreamID*);
+            if (OK(AudioObjectGetPropertyData (deviceID, &pa, 0, nullptr, &size, streams)))
+            {
+                pa.mSelector = kAudioStreamPropertyLatency;
+                size = sizeof (streamLatency);
+                // We could check all streams for the device, but it only ever seems to return the stream latency on the first stream
+                AudioObjectGetPropertyData (streams[0], &pa, 0, nullptr, &size, &streamLatency);
+            }
+        }
+		
+		return (int) (deviceLatency + safetyOffset + streamLatency);
     }
     
     struct LatencyDetails
