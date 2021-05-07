@@ -351,7 +351,7 @@ public:
         pa.mSelector = kAudioDevicePropertySafetyOffset;
         AudioObjectGetPropertyData (deviceID, &pa, 0, nullptr, &size, &safetyOffset);
 
-		// Query stream latency
+        // Query stream latency
         UInt32 streamLatency = 0;
         UInt32 numStreams;
         pa.mSelector = kAudioDevicePropertyStreams;
@@ -367,8 +367,8 @@ public:
                 AudioObjectGetPropertyData (streams[0], &pa, 0, nullptr, &size, &streamLatency);
             }
         }
-		
-		return (int) (deviceLatency + safetyOffset + streamLatency);
+        
+        return (int) (deviceLatency + safetyOffset + streamLatency);
     }
     
     struct LatencyDetails
