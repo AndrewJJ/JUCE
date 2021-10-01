@@ -32,6 +32,7 @@ TooltipWindow::TooltipWindow (Component* parentComp, int delayMs)
 {
     setAlwaysOnTop (true);
     setOpaque (true);
+    setAccessible (false);
 
     if (parentComp != nullptr)
         parentComp->addChildComponent (this);
@@ -91,12 +92,14 @@ void TooltipWindow::displayTip (Point<int> screenPos, const String& tip)
         }
         else
         {
-            updatePosition (tip, screenPos, Desktop::getInstance().getDisplays().getDisplayForPoint (screenPos)->userArea);
+            const auto physicalPos = ScalingHelpers::scaledScreenPosToUnscaled (screenPos);
+            const auto scaledPos = ScalingHelpers::unscaledScreenPosToScaled (*this, physicalPos);
+            updatePosition (tip, scaledPos, Desktop::getInstance().getDisplays().getDisplayForPoint (screenPos)->userArea);
 
             addToDesktop (ComponentPeer::windowHasDropShadow
-                            | ComponentPeer::windowIsTemporary
-                            | ComponentPeer::windowIgnoresKeyPresses
-                            | ComponentPeer::windowIgnoresMouseClicks);
+                          | ComponentPeer::windowIsTemporary
+                          | ComponentPeer::windowIgnoresKeyPresses
+                          | ComponentPeer::windowIgnoresMouseClicks);
         }
 
        #if JUCE_DEBUG
@@ -106,7 +109,7 @@ void TooltipWindow::displayTip (Point<int> screenPos, const String& tip)
 
         for (auto* w : activeTooltipWindows)
         {
-            if (w != this && w->tipShowing == tipShowing && w->getParentComponent() == parent)
+            if (w != nullptr && w != this && w->tipShowing == tipShowing && w->getParentComponent() == parent)
             {
                 // Looks like you have more than one TooltipWindow showing the same tip..
                 // Be careful not to create more than one instance of this class with the
@@ -122,7 +125,7 @@ void TooltipWindow::displayTip (Point<int> screenPos, const String& tip)
 
 String TooltipWindow::getTipFor (Component& c)
 {
-    if (Process::isForegroundProcess()
+    if (isForegroundOrEmbeddedProcess (&c)
          && ! ModifierKeys::currentModifiers.isAnyMouseButtonDown())
     {
         if (auto* ttc = dynamic_cast<TooltipClient*> (&c))
@@ -145,6 +148,19 @@ void TooltipWindow::hideTip()
         activeTooltipWindows.removeAllInstancesOf (this);
        #endif
     }
+}
+
+float TooltipWindow::getDesktopScaleFactor() const
+{
+    if (lastComponentUnderMouse != nullptr)
+        return Component::getApproximateScaleFactorForComponent (lastComponentUnderMouse);
+
+    return Component::getDesktopScaleFactor();
+}
+
+std::unique_ptr<AccessibilityHandler> TooltipWindow::createAccessibilityHandler()
+{
+    return createIgnoredAccessibilityHandler (*this);
 }
 
 void TooltipWindow::timerCallback()
@@ -175,6 +191,14 @@ void TooltipWindow::timerCallback()
         if (tipChanged || mouseWasClicked || mouseMovedQuickly)
             lastCompChangeTime = now;
 
+        auto showTip = [this, &mouseSource, &mousePos, &newTip]
+        {
+            bool mouseHasMovedSinceClick = mouseSource.getLastMouseDownPosition() != lastMousePos;
+
+            if (mouseHasMovedSinceClick)
+                displayTip (mousePos.roundToInt(), newTip);
+        };
+
         if (isVisible() || now < lastHideTime + 500)
         {
             // if a tip is currently visible (or has just disappeared), update to a new one
@@ -189,18 +213,17 @@ void TooltipWindow::timerCallback()
             }
             else if (tipChanged)
             {
-                displayTip (mousePos.roundToInt(), newTip);
+                showTip();
             }
         }
         else
         {
-            // if there isn't currently a tip, but one is needed, only let it
-            // appear after a timeout..
+            // if there isn't currently a tip, but one is needed, only let it appear after a timeout
             if (newTip.isNotEmpty()
-                 && newTip != tipShowing
-                 && now > lastCompChangeTime + (uint32) millisecondsBeforeTipAppears)
+                && newTip != tipShowing
+                && now > lastCompChangeTime + (uint32) millisecondsBeforeTipAppears)
             {
-                displayTip (mousePos.roundToInt(), newTip);
+                showTip();
             }
         }
     }

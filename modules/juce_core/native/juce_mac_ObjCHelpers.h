@@ -29,6 +29,16 @@ namespace juce
 {
 
 //==============================================================================
+inline Range<int> nsRangeToJuce (NSRange range)
+{
+    return { (int) range.location, (int) (range.location + range.length) };
+}
+
+inline NSRange juceRangeToNS (Range<int> range)
+{
+    return NSMakeRange ((NSUInteger) range.getStart(), (NSUInteger) range.getLength());
+}
+
 inline String nsStringToJuce (NSString* s)
 {
     return CharPointer_UTF8 ([s UTF8String]);
@@ -220,7 +230,7 @@ NSRect makeNSRect (const RectangleType& r) noexcept
 #endif
 
 template <typename SuperType, typename ReturnType, typename... Params>
-static ReturnType ObjCMsgSendSuper (id self, SEL sel, Params... params)
+inline ReturnType ObjCMsgSendSuper (id self, SEL sel, Params... params)
 {
     using SuperFn = ReturnType (*) (struct objc_super*, SEL, Params...);
     const auto fn = reinterpret_cast<SuperFn> (MetaSuperFn<ReturnType>::value);
@@ -243,6 +253,14 @@ template <typename NSType>
 using NSUniquePtr = std::unique_ptr<NSType, NSObjectDeleter>;
 
 //==============================================================================
+template <typename Type>
+inline Type getIvar (id self, const char* name)
+{
+    void* v = nullptr;
+    object_getInstanceVariable (self, name, &v);
+    return static_cast<Type> (v);
+}
+
 template <typename SuperclassType>
 struct ObjCClass
 {
@@ -311,14 +329,6 @@ struct ObjCClass
     static ReturnType sendSuperclassMessage (id self, SEL sel, Params... params)
     {
         return ObjCMsgSendSuper<SuperclassType, ReturnType, Params...> (self, sel, params...);
-    }
-
-    template <typename Type>
-    static Type getIvar (id self, const char* name)
-    {
-        void* v = nullptr;
-        object_getInstanceVariable (self, name, &v);
-        return static_cast<Type> (v);
     }
 
     Class cls;
@@ -392,7 +402,7 @@ NSObject* createNSObjectFromJuceClass (Class* obj)
 template <typename Class>
 Class* getJuceClassFromNSObject (NSObject* obj)
 {
-    return obj != nullptr ? ObjCLifetimeManagedClass<Class>:: template getIvar<Class*> (obj, "cppObject") : nullptr;
+    return obj != nullptr ? getIvar<Class*> (obj, "cppObject") : nullptr;
 }
 
 template <typename ReturnT, class Class, typename... Params>

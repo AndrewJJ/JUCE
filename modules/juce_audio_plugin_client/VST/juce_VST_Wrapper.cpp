@@ -153,11 +153,11 @@ namespace
     {
         const int frameThickness = GetSystemMetrics (SM_CYFIXEDFRAME);
 
-        while (w != 0)
+        while (w != nullptr)
         {
             auto parent = getWindowParent (w);
 
-            if (parent == 0)
+            if (parent == nullptr)
                 break;
 
             TCHAR windowType[32] = { 0 };
@@ -703,12 +703,7 @@ public:
     void setParameter (int32 index, float value)
     {
         if (auto* param = juceParameters.getParamForIndex (index))
-        {
-            param->setValue (value);
-
-            inParameterChangedCallback = true;
-            param->sendValueChangedMessageToListeners (value);
-        }
+            setValueAndNotifyIfChanged (*param, value);
     }
 
     static void setParameterCB (Vst2::AEffect* vstInterface, int32 index, float value)
@@ -1176,11 +1171,11 @@ public:
 
                 HWND w = (HWND) getWindowHandle();
 
-                while (w != 0)
+                while (w != nullptr)
                 {
                     HWND parent = getWindowParent (w);
 
-                    if (parent == 0)
+                    if (parent == nullptr)
                         break;
 
                     TCHAR windowType [32] = { 0 };
@@ -1194,7 +1189,7 @@ public:
                     GetWindowRect (parent, &parentPos);
 
                     if (w != (HWND) getWindowHandle())
-                        SetWindowPos (w, 0, 0, 0, newWidth + dw, newHeight + dh,
+                        SetWindowPos (w, nullptr, 0, 0, newWidth + dw, newHeight + dh,
                                       SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER);
 
                     dw = (parentPos.right - parentPos.left) - (windowPos.right - windowPos.left);
@@ -1206,11 +1201,11 @@ public:
                         break;
 
                     if (dw > 100 || dh > 100)
-                        w = 0;
+                        w = nullptr;
                 }
 
-                if (w != 0)
-                    SetWindowPos (w, 0, 0, 0, newWidth + dw, newHeight + dh,
+                if (w != nullptr)
+                    SetWindowPos (w, nullptr, 0, 0, newWidth + dw, newHeight + dh,
                                   SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOZORDER | SWP_NOOWNERZORDER);
                #endif
             }
@@ -1327,23 +1322,44 @@ private:
         void update (const ChangeDetails& details)
         {
             if (details.latencyChanged)
+            {
                 owner.vstEffect.initialDelay = owner.processor->getLatencySamples();
+                callbackBits |= audioMasterIOChangedBit;
+            }
 
             if (details.parameterInfoChanged || details.programChanged)
-                triggerAsyncUpdate();
+                callbackBits |= audioMasterUpdateDisplayBit;
+
+            triggerAsyncUpdate();
         }
 
     private:
         void handleAsyncUpdate() override
         {
+            const auto callbacksToFire = callbackBits.exchange (0);
+
             if (auto* callback = owner.hostCallback)
             {
-                callback (&owner.vstEffect, Vst2::audioMasterUpdateDisplay, 0, 0, nullptr, 0);
-                callback (&owner.vstEffect, Vst2::audioMasterIOChanged,     0, 0, nullptr, 0);
+                struct FlagPair
+                {
+                    Vst2::AudioMasterOpcodesX opcode;
+                    int bit;
+                };
+
+                constexpr FlagPair pairs[] { { Vst2::audioMasterUpdateDisplay, audioMasterUpdateDisplayBit },
+                                             { Vst2::audioMasterIOChanged,     audioMasterIOChangedBit } };
+
+                for (const auto& pair : pairs)
+                    if ((callbacksToFire & pair.bit) != 0)
+                        callback (&owner.vstEffect, pair.opcode, 0, 0, nullptr, 0);
             }
         }
 
+        static constexpr auto audioMasterUpdateDisplayBit = 1 << 0;
+        static constexpr auto audioMasterIOChangedBit     = 1 << 1;
+
         JuceVSTWrapper& owner;
+        std::atomic<int> callbackBits { 0 };
     };
 
     static JuceVSTWrapper* getWrapper (Vst2::AEffect* v) noexcept  { return static_cast<JuceVSTWrapper*> (v->object); }
@@ -1411,6 +1427,15 @@ private:
    #else
     static void checkWhetherMessageThreadIsCorrect() {}
    #endif
+
+    void setValueAndNotifyIfChanged (AudioProcessorParameter& param, float newValue)
+    {
+        if (param.getValue() == newValue)
+            return;
+
+        inParameterChangedCallback = true;
+        param.setValueNotifyingHost (newValue);
+    }
 
     //==============================================================================
     template <typename FloatType>
@@ -1695,12 +1720,7 @@ private:
         {
             if (! LegacyAudioParameter::isLegacy (param))
             {
-                auto value = param->getValueForText (String::fromUTF8 ((char*) args.ptr));
-                param->setValue (value);
-
-                inParameterChangedCallback = true;
-                param->sendValueChangedMessageToListeners (value);
-
+                setValueAndNotifyIfChanged (*param, param->getValueForText (String::fromUTF8 ((char*) args.ptr)));
                 return 1;
             }
         }
@@ -1908,7 +1928,9 @@ private:
 
     pointer_sized_int handleKeyboardFocusRequired (VstOpCodeArguments)
     {
+        JUCE_BEGIN_IGNORE_WARNINGS_MSVC (6326)
         return (JucePlugin_EditorRequiresKeyboardFocus != 0) ? 1 : 0;
+        JUCE_END_IGNORE_WARNINGS_MSVC
     }
 
     pointer_sized_int handleGetVstInterfaceVersion (VstOpCodeArguments)
@@ -1974,8 +1996,6 @@ private:
        #if ! JUCE_MAC
         if (editorComp != nullptr)
             editorComp->setContentScaleFactor (scale);
-
-        lastScaleFactorReceived = scale;
        #else
         ignoreUnused (scale);
        #endif
@@ -2049,10 +2069,6 @@ private:
     Vst2::ERect editorRect;
     MidiBuffer midiEvents;
     VSTMidiEventList outgoingEvents;
-
-   #if ! JUCE_MAC
-    float lastScaleFactorReceived = 1.0f;
-   #endif
 
     LegacyAudioParametersWrapper juceParameters;
 

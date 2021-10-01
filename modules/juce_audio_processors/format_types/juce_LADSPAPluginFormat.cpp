@@ -113,7 +113,7 @@ private:
 };
 
 //==============================================================================
-class LADSPAPluginInstance     : public AudioPluginInstance
+class LADSPAPluginInstance final    : public AudioPluginInstance
 {
 public:
     LADSPAPluginInstance (const LADSPAModuleHandle::Ptr& m)
@@ -197,7 +197,7 @@ public:
             }
         }
 
-        setParameterTree (std::move (newTree));
+        setHostedParameterTree (std::move (newTree));
 
         for (auto* param : getParameters())
             if (auto* ladspaParam = dynamic_cast<LADSPAParameter*> (param))
@@ -516,6 +516,11 @@ private:
 
         bool isAutomatable() const override                            { return automatable; }
 
+        String getParameterID() const override
+        {
+            return String (paramID);
+        }
+
         static float scaledValue (float low, float high, float alpha, bool useLog) noexcept
         {
             if (useLog && low > 0 && high > 0)
@@ -631,7 +636,7 @@ void LADSPAPluginFormat::createPluginInstance (const PluginDescription& desc,
 
         if (module != nullptr)
         {
-            shellLADSPAUIDToCreate = desc.uniqueId;
+            shellLADSPAUIDToCreate = desc.uniqueId != 0 ? desc.uniqueId : desc.deprecatedUid;
 
             result.reset (new LADSPAPluginInstance (module));
 
