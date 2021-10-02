@@ -373,7 +373,7 @@ public:
         {
             HeapBlock<AudioStreamID> streams (numStreams);
             size = sizeof (AudioStreamID*);
-            if (OK(AudioObjectGetPropertyData (deviceID, &pa, 0, nullptr, &size, streams)))
+            if (numStreams > 0 && OK(AudioObjectGetPropertyData (deviceID, &pa, 0, nullptr, &size, streams)))
             {
                 pa.mSelector = kAudioStreamPropertyLatency;
                 size = sizeof (streamLatency);
@@ -415,7 +415,7 @@ public:
         {
             HeapBlock<AudioStreamID> streams (numStreams);
             size = sizeof (AudioStreamID*);
-            if (OK(AudioObjectGetPropertyData (deviceID, &pa, 0, nullptr, &size, streams)))
+            if (numStreams > 0 && OK(AudioObjectGetPropertyData (deviceID, &pa, 0, nullptr, &size, streams)))
             {
                 pa.mSelector = kAudioStreamPropertyLatency;
                 size = sizeof (streamLatency);
