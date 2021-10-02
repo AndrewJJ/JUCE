@@ -397,7 +397,7 @@ public:
         UInt32 deviceLatency = 0;
         UInt32 size = sizeof (deviceLatency);
         AudioObjectPropertyAddress pa;
-        pa.mElement = kAudioObjectPropertyElementMaster;
+        pa.mElement = juceAudioObjectPropertyElementMain;
         pa.mSelector = kAudioDevicePropertyLatency;
         pa.mScope = scope;
         AudioObjectGetPropertyData (deviceID, &pa, 0, nullptr, &size, &deviceLatency);
