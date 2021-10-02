@@ -352,13 +352,13 @@ public:
 
     int getLatencyFromDevice (AudioObjectPropertyScope scope) const
     {
-        UInt32 latency = 0;
-        UInt32 size = sizeof (latency);
+        UInt32 deviceLatency = 0;
+        UInt32 size = sizeof (deviceLatency);
         AudioObjectPropertyAddress pa;
         pa.mElement = juceAudioObjectPropertyElementMain;
         pa.mSelector = kAudioDevicePropertyLatency;
         pa.mScope = scope;
-        AudioObjectGetPropertyData (deviceID, &pa, 0, nullptr, &size, &latency);
+        AudioObjectGetPropertyData (deviceID, &pa, 0, nullptr, &size, &deviceLatency);
 
         UInt32 safetyOffset = 0;
         size = sizeof (safetyOffset);
