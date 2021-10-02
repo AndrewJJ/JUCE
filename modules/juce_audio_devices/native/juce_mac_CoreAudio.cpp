@@ -388,6 +388,7 @@ public:
     struct LatencyDetails
     {
         UInt32 deviceLatency;
+        UInt32 bufferSize;
         UInt32 safetyOffset;
         UInt32 streamLatency;
     };
@@ -424,7 +425,7 @@ public:
             }
         }
 
-        return { deviceLatency, safetyOffset, streamLatency };
+        return { deviceLatency, static_cast<UInt32> (getFrameSizeFromDevice()), safetyOffset, streamLatency };
     }
 
     int getBitDepthFromDevice (AudioObjectPropertyScope scope) const
@@ -1128,9 +1129,11 @@ public:
     {
         DynamicObject details = AudioIODevice::getLatencyDetails();
         details.setProperty ("inputDeviceLatency", static_cast<int> (internal->inputLatencyDetails.deviceLatency));
+        details.setProperty ("inputBufferSize", static_cast<int> (internal->inputLatencyDetails.bufferSize));
         details.setProperty ("inputSafetyOffset", static_cast<int> (internal->inputLatencyDetails.safetyOffset));
         details.setProperty ("inputStreamLatency", static_cast<int> (internal->inputLatencyDetails.streamLatency));
         details.setProperty ("outputDeviceLatency", static_cast<int> (internal->outputLatencyDetails.deviceLatency));
+        details.setProperty ("outputBufferSize", static_cast<int> (internal->outputLatencyDetails.bufferSize));
         details.setProperty ("outputSafetyOffset", static_cast<int> (internal->outputLatencyDetails.safetyOffset));
         details.setProperty ("outputStreamLatency", static_cast<int> (internal->outputLatencyDetails.streamLatency));
         return details;
