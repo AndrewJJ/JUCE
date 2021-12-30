@@ -965,10 +965,6 @@ private:
                 Thread::sleep (10);
             }
 
-            // Give a chance for devices to respond to new requests (e.g. buffer size queries) after
-            // changing sample rate (e.g. for MOTU M4)
-            Thread::sleep (10);
-
             if (err == 0)
                 currentSampleRate = newRate;
 
