@@ -144,6 +144,10 @@ void AudioDeviceManager::pickCurrentDeviceTypeWithDevices()
             || ! ptr->getDeviceNames (false).isEmpty();
     };
 
+    if (auto* type = findType (currentDeviceType))
+        if (deviceTypeHasDevices (type))
+            return;
+
     const auto iter = std::find_if (availableDeviceTypes.begin(),
                                     availableDeviceTypes.end(),
                                     deviceTypeHasDevices);
@@ -905,7 +909,6 @@ void AudioDeviceManager::audioDeviceIOCallbackInt (const float** inputChannelDat
     const ScopedLock sl (audioCallbackLock);
 
     inputLevelGetter->updateLevel (inputChannelData, numInputChannels, numSamples);
-    outputLevelGetter->updateLevel (const_cast<const float**> (outputChannelData), numOutputChannels, numSamples);
 
     if (callbacks.size() > 0)
     {
@@ -953,6 +956,8 @@ void AudioDeviceManager::audioDeviceIOCallbackInt (const float** inputChannelDat
         if (testSoundPosition >= testSound->getNumSamples())
             testSound.reset();
     }
+
+    outputLevelGetter->updateLevel (const_cast<const float**> (outputChannelData), numOutputChannels, numSamples);
 }
 
 void AudioDeviceManager::audioDeviceAboutToStartInt (AudioIODevice* const device)
@@ -1396,6 +1401,32 @@ public:
 
             expectEquals (newSetup.outputChannels.countNumberOfSetBits(), 2);
             expectEquals (newSetup.inputChannels.countNumberOfSetBits(), 2);
+        }
+
+        beginTest ("If a device type has been explicitly set to a type with devices, "
+                   "initialisation should respect this choice");
+        {
+            AudioDeviceManager manager;
+            initialiseManagerWithEmptyDeviceType (manager);
+            manager.setCurrentAudioDeviceType (mockBName, true);
+
+            AudioDeviceManager::AudioDeviceSetup setup;
+            expect (manager.initialise (2, 2, nullptr, true, {}, &setup).isEmpty());
+
+            expectEquals (manager.getCurrentAudioDeviceType(), mockBName);
+        }
+
+        beginTest ("If a device type has been explicitly set to a type without devices, "
+                   "initialisation should pick a type with devices instead");
+        {
+            AudioDeviceManager manager;
+            initialiseManagerWithEmptyDeviceType (manager);
+            manager.setCurrentAudioDeviceType (emptyName, true);
+
+            AudioDeviceManager::AudioDeviceSetup setup;
+            expect (manager.initialise (2, 2, nullptr, true, {}, &setup).isEmpty());
+
+            expectEquals (manager.getCurrentAudioDeviceType(), mockAName);
         }
 
         beginTest ("Carry out a long sequence of configuration changes");

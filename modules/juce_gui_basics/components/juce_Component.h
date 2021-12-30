@@ -1261,7 +1261,7 @@ public:
     */
     int getExplicitFocusOrder() const;
 
-    /** A focus container type that can be passed to setFocusContainer().
+    /** A focus container type that can be passed to setFocusContainerType().
 
         If a component is marked as a focus container or keyboard focus container then
         it will act as the top-level component within which focus or keyboard focus is
@@ -1318,25 +1318,25 @@ public:
 
     /** Returns true if this component has been marked as a focus container.
 
-        @see setFocusContainer
+        @see setFocusContainerType
     */
     bool isFocusContainer() const noexcept;
 
     /** Returns true if this component has been marked as a keyboard focus container.
 
-        @see setFocusContainer
+        @see setFocusContainerType
     */
     bool isKeyboardFocusContainer() const noexcept;
 
     /** Returns the focus container for this component.
 
-        @see isFocusContainer, setFocusContainer
+        @see isFocusContainer, setFocusContainerType
     */
     Component* findFocusContainer() const;
 
     /** Returns the keyboard focus container for this component.
 
-        @see isFocusContainer, setFocusContainer
+        @see isFocusContainer, setFocusContainerType
     */
     Component* findKeyboardFocusContainer() const;
 
@@ -1386,7 +1386,7 @@ public:
           by calling getWantsKeyboardFocus), it gets it.
         - if the component itself doesn't want focus, it will try to pass it
           on to whichever of its children is the default component, as determined by
-          the getDefaultComponent() implemetation of the ComponentTraverser returned
+          the getDefaultComponent() implementation of the ComponentTraverser returned
           by createKeyboardFocusTraverser().
         - if none of its children want focus at all, it will pass it up to its
           parent instead, unless it's a top-level component without a parent,
@@ -1427,14 +1427,14 @@ public:
     /** Tries to move the keyboard focus to one of this component's siblings.
 
         This will try to move focus to either the next or previous component, as
-        determined by the getNextComponent() and getPreviousComponent() implemetations
+        determined by the getNextComponent() and getPreviousComponent() implementations
         of the ComponentTraverser returned by createKeyboardFocusTraverser().
 
         This is the method that is used when shifting focus by pressing the tab key.
 
         @param moveToNext   if true, the focus will move forwards; if false, it will
                             move backwards
-        @see grabKeyboardFocus, giveAwayKeyboardFocus, setFocusContainer, setWantsKeyboardFocus
+        @see grabKeyboardFocus, giveAwayKeyboardFocus, setFocusContainerType, setWantsKeyboardFocus
     */
     void moveKeyboardFocusToSibling (bool moveToNext);
 
@@ -1452,8 +1452,8 @@ public:
         passed from this component.
 
         The default implementation of this method will return an instance of FocusTraverser
-        if this component is a focus container (as determined by the setFocusContainer() method).
-        If the component isn't a focus container, then it will recursively call
+        if this component is a focus container (as determined by the setFocusContainerType()
+        method). If the component isn't a focus container, then it will recursively call
         createFocusTraverser() on its parents.
 
         If you override this to return a custom traverser object, then this component and
@@ -1466,8 +1466,8 @@ public:
 
         The default implementation of this method will return an instance of
         KeyboardFocusTraverser if this component is a keyboard focus container (as determined by
-        the setFocusContainer() method). If the component isn't a keyboard focus container, then
-        it will recursively call createKeyboardFocusTraverser() on its parents.
+        the setFocusContainerType() method). If the component isn't a keyboard focus container,
+        then it will recursively call createKeyboardFocusTraverser() on its parents.
 
         If you override this to return a custom traverser object, then this component and
         all its sub-components will use the new object to make their keyboard focusing

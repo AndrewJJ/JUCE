@@ -1585,7 +1585,7 @@ struct VSTPluginInstance final   : public AudioPluginInstance,
             {
                 char nm[264] = { 0 };
 
-                if (dispatch (Vst2::effGetProgramNameIndexed, jlimit (0, getNumPrograms(), index), -1, nm, 0) != 0)
+                if (dispatch (Vst2::effGetProgramNameIndexed, jlimit (0, getNumPrograms() - 1, index), -1, nm, 0) != 0)
                     return String::fromUTF8 (nm).trim();
             }
         }
@@ -2396,21 +2396,29 @@ private:
                     else
                         vstHostTime.flags &= ~Vst2::kVstTransportChanged;
 
-                    switch (position.frameRate)
+                    struct OptionalFrameRate
                     {
-                        case AudioPlayHead::fps24:       setHostTimeFrameRate (Vst2::kVstSmpte24fps, 24.0, position.timeInSeconds); break;
-                        case AudioPlayHead::fps25:       setHostTimeFrameRate (Vst2::kVstSmpte25fps, 25.0, position.timeInSeconds); break;
-                        case AudioPlayHead::fps30:       setHostTimeFrameRate (Vst2::kVstSmpte30fps, 30.0, position.timeInSeconds); break;
-                        case AudioPlayHead::fps60:       setHostTimeFrameRate (Vst2::kVstSmpte60fps, 60.0, position.timeInSeconds); break;
+                        bool valid;
+                        Vst2::VstInt32 rate;
+                    };
 
-                        case AudioPlayHead::fps23976:    setHostTimeFrameRateDrop (Vst2::kVstSmpte239fps,   24.0, position.timeInSeconds); break;
-                        case AudioPlayHead::fps2997:     setHostTimeFrameRateDrop (Vst2::kVstSmpte2997fps,  30.0, position.timeInSeconds); break;
-                        case AudioPlayHead::fps2997drop: setHostTimeFrameRateDrop (Vst2::kVstSmpte2997dfps, 30.0, position.timeInSeconds); break;
-                        case AudioPlayHead::fps30drop:   setHostTimeFrameRateDrop (Vst2::kVstSmpte30dfps,   30.0, position.timeInSeconds); break;
-                        case AudioPlayHead::fps60drop:   setHostTimeFrameRateDrop (Vst2::kVstSmpte599fps,   60.0, position.timeInSeconds); break;
-                        case AudioPlayHead::fpsUnknown:
-                        default: break;
-                    }
+                    const auto optionalFrameRate = [&fr = position.frameRate]() -> OptionalFrameRate
+                    {
+                        switch (fr.getBaseRate())
+                        {
+                            case 24:        return { true, fr.isPullDown() ? Vst2::kVstSmpte239fps : Vst2::kVstSmpte24fps };
+                            case 25:        return { true, fr.isPullDown() ? Vst2::kVstSmpte249fps : Vst2::kVstSmpte25fps };
+                            case 30:        return { true, fr.isPullDown() ? (fr.isDrop() ? Vst2::kVstSmpte2997dfps : Vst2::kVstSmpte2997fps)
+                                                                           : (fr.isDrop() ? Vst2::kVstSmpte30dfps   : Vst2::kVstSmpte30fps) };
+                            case 60:        return { true, fr.isPullDown() ? Vst2::kVstSmpte599fps : Vst2::kVstSmpte60fps };
+                        }
+
+                        return { false, Vst2::VstSmpteFrameRate{} };
+                    }();
+
+                    vstHostTime.flags |= optionalFrameRate.valid ? Vst2::kVstSmpteValid : 0;
+                    vstHostTime.smpteFrameRate = optionalFrameRate.rate;
+                    vstHostTime.smpteOffset = (int32) (position.timeInSeconds * 80.0 * position.frameRate.getEffectiveRate() + 0.5);
 
                     if (position.isLooping)
                     {
@@ -2506,18 +2514,6 @@ private:
     }
 
     //==============================================================================
-    void setHostTimeFrameRate (long frameRateIndex, double frameRate, double currentTime) noexcept
-    {
-        vstHostTime.flags |= Vst2::kVstSmpteValid;
-        vstHostTime.smpteFrameRate   = (int32) frameRateIndex;
-        vstHostTime.smpteOffset = (int32) (currentTime * 80.0 * frameRate + 0.5);
-    }
-
-    void setHostTimeFrameRateDrop (long frameRateIndex, double frameRate, double currentTime) noexcept
-    {
-        setHostTimeFrameRate (frameRateIndex, frameRate * 1000.0 / 1001.0, currentTime);
-    }
-
     bool restoreProgramSettings (const fxProgram* const prog)
     {
         if (compareMagic (prog->chunkMagic, "CcnK")
@@ -2921,18 +2917,28 @@ public:
                               0,
                               0,
                               SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER);
+
+                MessageManager::callAsync ([ref = SafePointer<Component> (this)]
+                {
+                    // Clean up after the editor window, in case it tried to move itself
+                    // into the wrong location over this component.
+                    if (ref == nullptr)
+                        return;
+
+                    if (auto* p = ref->getPeer())
+                        p->repaint (p->getBounds().withPosition ({}));
+                });
             }
            #elif JUCE_LINUX || JUCE_BSD
             if (pluginWindow != 0)
             {
-                const auto editorSize = plugin.getEditorSize();
                 auto* symbols = X11Symbols::getInstance();
                 symbols->xMoveResizeWindow (display,
                                             pluginWindow,
                                             pos.getX(),
                                             pos.getY(),
-                                            (unsigned int) editorSize.getWidth(),
-                                            (unsigned int) editorSize.getHeight());
+                                            (unsigned int) pos.getWidth(),
+                                            (unsigned int) pos.getHeight());
                 symbols->xMapRaised (display, pluginWindow);
                 symbols->xFlush (display);
             }

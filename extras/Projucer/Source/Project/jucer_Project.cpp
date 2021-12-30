@@ -700,15 +700,17 @@ void Project::saveProject (Async async,
         return;
     }
 
-    if (saver != nullptr)
+    if (isTemporaryProject())
     {
-        onCompletion (Result::ok());
+        // Don't try to save a temporary project directly. Instead, check whether the
+        // project is temporary before saving it, and call saveAndMoveTemporaryProject
+        // in that case.
+        onCompletion (Result::fail ("Cannot save temporary project."));
         return;
     }
 
-    if (isTemporaryProject())
+    if (saver != nullptr)
     {
-        saveAndMoveTemporaryProject (false);
         onCompletion (Result::ok());
         return;
     }
@@ -731,9 +733,7 @@ void Project::saveProject (Async async,
             return;
 
         ref->saver = nullptr;
-
-        if (onCompletion != nullptr)
-            onCompletion (result);
+        NullCheckedInvocation::invoke (onCompletion, result);
     });
 }
 
@@ -1091,9 +1091,9 @@ void Project::valueTreePropertyChanged (ValueTree& tree, const Identifier& prope
         {
             updateModuleWarnings();
         }
-
-        changed();
     }
+
+    changed();
 }
 
 void Project::valueTreeChildAdded (ValueTree& parent, ValueTree& child)
@@ -2000,7 +2000,7 @@ ValueTree Project::getConfigNode()
     return projectRoot.getOrCreateChildWithName (Ids::JUCEOPTIONS, nullptr);
 }
 
-ValueWithDefault Project::getConfigFlag (const String& name)
+ValueTreePropertyWithDefault Project::getConfigFlag (const String& name)
 {
     auto configNode = getConfigNode();
 
