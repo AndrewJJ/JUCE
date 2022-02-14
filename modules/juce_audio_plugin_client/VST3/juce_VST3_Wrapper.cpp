@@ -58,7 +58,7 @@ JUCE_BEGIN_NO_SANITIZE ("vptr")
 
 #if JUCE_VST3_CAN_REPLACE_VST2
 
- #if ! JUCE_MSVC
+ #if ! JUCE_MSVC && ! defined (__cdecl)
   #define __cdecl
  #endif
 
@@ -2370,10 +2370,10 @@ public:
     tresult PLUGIN_API getRoutingInfo (Vst::RoutingInfo&, Vst::RoutingInfo&) override   { return kNotImplemented; }
 
     //==============================================================================
-    bool isBypassed()
+    bool isBypassed() const
     {
         if (auto* bypassParam = comPluginInstance->getBypassParameter())
-            return (bypassParam->getValue() != 0.0f);
+            return bypassParam->getValue() >= 0.5f;
 
         return false;
     }
@@ -3155,9 +3155,27 @@ public:
                 return kResultFalse;
         }
 
-        if      (processSetup.symbolicSampleSize == Vst::kSample32) processAudio<float>  (data, channelListFloat);
-        else if (processSetup.symbolicSampleSize == Vst::kSample64) processAudio<double> (data, channelListDouble);
-        else jassertfalse;
+        // If all of these are zero, the host is attempting to flush parameters without processing audio.
+        if (data.numSamples != 0 || data.numInputs != 0 || data.numOutputs != 0)
+        {
+            if      (processSetup.symbolicSampleSize == Vst::kSample32) processAudio<float>  (data, channelListFloat);
+            else if (processSetup.symbolicSampleSize == Vst::kSample64) processAudio<double> (data, channelListDouble);
+            else jassertfalse;
+        }
+
+        if (auto* changes = data.outputParameterChanges)
+        {
+            comPluginInstance->forAllChangedParameters ([&] (Vst::ParamID paramID, float value)
+                                                        {
+                                                            Steinberg::int32 queueIndex = 0;
+
+                                                            if (auto* queue = changes->addParameterData (paramID, queueIndex))
+                                                            {
+                                                                Steinberg::int32 pointIndex = 0;
+                                                                queue->addPoint (0, value, pointIndex);
+                                                            }
+                                                        });
+        }
 
        #if JucePlugin_ProducesMidiOutput
         if (isMidiOutputBusEnabled && data.outputEvents != nullptr)
@@ -3356,7 +3374,9 @@ private:
                 if (totalInputChans == pluginInstance->getTotalNumInputChannels()
                  && totalOutputChans == pluginInstance->getTotalNumOutputChannels())
                 {
-                    if (isBypassed())
+                    // processBlockBypassed should only ever be called if the AudioProcessor doesn't
+                    // return a valid parameter from getBypassParameter
+                    if (pluginInstance->getBypassParameter() == nullptr && comPluginInstance->getBypassParameter()->getValue() >= 0.5f)
                         pluginInstance->processBlockBypassed (buffer, midiBuffer);
                     else
                         pluginInstance->processBlock (buffer, midiBuffer);
@@ -3380,20 +3400,6 @@ private:
             */
             jassert (midiBuffer.getNumEvents() <= numMidiEventsComingIn);
            #endif
-        }
-
-        if (auto* changes = data.outputParameterChanges)
-        {
-            comPluginInstance->forAllChangedParameters ([&] (Vst::ParamID paramID, float value)
-            {
-                Steinberg::int32 queueIndex = 0;
-
-                if (auto* queue = changes->addParameterData (paramID, queueIndex))
-                {
-                    Steinberg::int32 pointIndex = 0;
-                    queue->addPoint (0, value, pointIndex);
-                }
-            });
         }
     }
 
@@ -3485,7 +3491,7 @@ private:
             ptr = {};
         }
 
-        T* operator->()               { return ptr.operator->(); }
+        T* operator->() const         { return ptr.operator->(); }
         T* get() const noexcept       { return ptr.get(); }
         operator T*() const noexcept  { return ptr.get(); }
 
@@ -3541,10 +3547,12 @@ DECLARE_CLASS_IID (JuceAudioProcessor, 0x0101ABAB, 0xABCDEF01, JucePlugin_Manufa
 DEF_CLASS_IID (JuceAudioProcessor)
 
 #if JUCE_VST3_CAN_REPLACE_VST2
+ // Defined in PluginUtilities.cpp
+ void getUUIDForVST2ID (bool, uint8[16]);
+
  FUID getFUIDForVST2ID (bool forControllerUID)
  {
      TUID uuid;
-     extern JUCE_API void getUUIDForVST2ID (bool, uint8[16]);
      getUUIDForVST2ID (forControllerUID, (uint8*) uuid);
      return FUID (uuid);
  }
